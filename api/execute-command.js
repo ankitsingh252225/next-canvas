@@ -2,13 +2,17 @@ import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).end(); // Only POST
-
-  const { command } = req.body;
-  if (!command) return res.status(400).json({ error: "Command missing" });
-
+export const POST = async (req) => {
   try {
+    const { command } = await req.json();
+
+    if (!command) {
+      return new Response(JSON.stringify({ error: "Command missing" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const prompt = `
       You are an image editor assistant.
       Convert user command into JSON with following structure:
@@ -33,9 +37,15 @@ export default async function handler(req, res) {
     const message = completion.choices[0].message.content.trim();
     const actionJSON = JSON.parse(message);
 
-    res.status(200).json(actionJSON);
+    return new Response(JSON.stringify(actionJSON), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "AI command execution failed" });
+    return new Response(JSON.stringify({ error: "AI command execution failed", details: err.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
-}
+};
