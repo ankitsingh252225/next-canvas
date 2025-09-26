@@ -126,85 +126,49 @@ export default function CanvasEditor() {
   };
 
   // --- Execute Command ---
- const executeCommandAI = async (command) => {
-   if (!command) {
-     toast.error("Please enter a command!");
-     return;
-   }
+ const executeCommandAI = async (commandText) => {
+  if (!commandText.trim()) return toast.error("Please enter a command!");
+  try {
+    // Vercel deployment ke liye relative URL
+    const res = await fetch("/api/execute-command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: commandText }),
+    });
 
-   try {
-     // --- Send command to backend ---
-     const res = await fetch("/api/execute-command", {
-       method: "POST",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ command }),
-     });
+    if (!res.ok) return toast.error("Command execution failed!");
+    const actionJSON = await res.json();
 
-     if (!res.ok) {
-       const text = await res.text();
-       console.error("Backend error:", res.status, text);
-       toast.error(`Backend error: ${res.status}`);
-       return;
-     }
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
 
-     // --- Parse response JSON safely ---
-     let actionJSON;
-     try {
-       actionJSON = await res.json();
-     } catch (err) {
-       console.error("Invalid JSON from backend:", err);
-       toast.error("Invalid response from AI backend");
-       return;
-     }
+    if (actionJSON.action === "draw_circle") {
+      ctx.beginPath();
+      ctx.arc(actionJSON.x || 100, actionJSON.y || 100, actionJSON.radius || 50, 0, 2 * Math.PI);
+      ctx.fillStyle = actionJSON.color || "red";
+      ctx.fill();
+      ctx.closePath();
+    } else if (actionJSON.action === "adjust_brightness") {
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const pixels = imgData.data;
+      const percent = actionJSON.percent || 20;
+      for (let i = 0; i < pixels.length; i += 4) {
+        pixels[i] = Math.min(255, pixels[i] + (pixels[i] * percent) / 100);
+        pixels[i + 1] = Math.min(255, pixels[i + 1] + (pixels[i + 1] * percent) / 100);
+        pixels[i + 2] = Math.min(255, pixels[i + 2] + (pixels[i + 2] * percent) / 100);
+      }
+      ctx.putImageData(imgData, 0, 0);
+    } else {
+      toast.error("Unknown action: " + actionJSON.action);
+    }
 
-     // --- Execute on canvas ---
-     const canvas = canvasRef.current;
-     if (!canvas) {
-       toast.error("Canvas not found!");
-       return;
-     }
-     const ctx = canvas.getContext("2d");
+    toast.success("Command executed!");
+  } catch (err) {
+    console.error(err);
+    toast.error("Command execution failed!");
+  }
+};
 
-     if (actionJSON.action === "draw_circle") {
-       ctx.beginPath();
-       ctx.arc(
-         actionJSON.x || 100,
-         actionJSON.y || 100,
-         actionJSON.radius || 50,
-         0,
-         2 * Math.PI
-       );
-       ctx.fillStyle = actionJSON.color || "red";
-       ctx.fill();
-       ctx.closePath();
-     } else if (actionJSON.action === "adjust_brightness") {
-       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-       const pixels = imgData.data;
-       const percent = actionJSON.percent || 20;
-       for (let i = 0; i < pixels.length; i += 4) {
-         pixels[i] = Math.min(255, pixels[i] + (pixels[i] * percent) / 100);
-         pixels[i + 1] = Math.min(
-           255,
-           pixels[i + 1] + (pixels[i + 1] * percent) / 100
-         );
-         pixels[i + 2] = Math.min(
-           255,
-           pixels[i + 2] + (pixels[i + 2] * percent) / 100
-         );
-       }
-       ctx.putImageData(imgData, 0, 0);
-     } else {
-       console.warn("Unknown action:", actionJSON.action);
-       toast.error(`Unknown action: ${actionJSON.action}`);
-       return;
-     }
-
-     toast.success("AI command executed successfully!");
-   } catch (err) {
-     console.error("Error executing AI command:", err);
-     toast.error("AI command failed! Check console for details.");
-   }
- };
 
   // --- File Upload ---
   const handleFileChange = (e) => {

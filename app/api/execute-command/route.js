@@ -2,16 +2,10 @@ import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export const POST = async (req) => {
+export async function POST(req) {
   try {
     const { command } = await req.json();
-
-    if (!command) {
-      return new Response(JSON.stringify({ error: "Command missing" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    if (!command) return new Response(JSON.stringify({ error: "Command missing" }), { status: 400 });
 
     const prompt = `
       You are an image editor assistant.
@@ -28,27 +22,18 @@ export const POST = async (req) => {
       Only return valid JSON.
     `;
 
-     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.4,
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 1500,
+      max_tokens: 200,
     });
 
     const message = completion.choices[0].message.content.trim();
     const actionJSON = JSON.parse(message);
 
-    return new Response(JSON.stringify(actionJSON), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    console.error(err);
-    return new Response(JSON.stringify({ error: "AI command execution failed", details: err.message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify(actionJSON), { status: 200 });
+  } catch (error) {
+    console.error(error);
+    return new Response(JSON.stringify({ error: "AI command execution failed", details: error.message }), { status: 500 });
   }
-};
-
-
+}
