@@ -11,10 +11,11 @@ export default function CanvasEditor() {
   const [bgLoading, setBgLoading] = useState(false);
 
   // --- Draw Image to Canvas ---
-   const drawImageToCanvas = (img) => {
+  const drawImageToCanvas = (img) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     const aspectRatio = img.width / img.height;
     let newWidth = canvas.width;
     let newHeight = newWidth / aspectRatio;
@@ -22,21 +23,26 @@ export default function CanvasEditor() {
       newHeight = canvas.height;
       newWidth = newHeight * aspectRatio;
     }
+
     const xOffset = (canvas.width - newWidth) / 2;
     const yOffset = (canvas.height - newHeight) / 2;
+
     ctx.drawImage(img, xOffset, yOffset, newWidth, newHeight);
   };
 
   // --- Blur Function ---
   const applyBlur = () => {
     if (!image || !window.cv) return;
+
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
     let src = cv.imread(canvas);
     let dst = new cv.Mat();
     let ksize = blurValue % 2 === 0 ? blurValue + 1 : blurValue;
     if (ksize < 1) ksize = 1;
+
     const k = new cv.Size(ksize, ksize);
     cv.GaussianBlur(src, dst, k, 0, 0, cv.BORDER_DEFAULT);
     cv.imshow(canvas, dst);
@@ -46,48 +52,73 @@ export default function CanvasEditor() {
 
   //  Improved Background Removal with resize & compress ---
   const removeBackground = async () => {
-    if (!image) return toast.error("Please upload an image!");
+    if (!image) {
+      toast.error("Please upload an image first!");
+      return;
+    }
+
     setBgLoading(true);
+
     try {
-      const MAX = 800;
+      // Resize & compress before sending to backend
+      const MAX_WIDTH = 800;
+      const MAX_HEIGHT = 800;
       let newWidth = image.width;
       let newHeight = image.height;
-      if (newWidth > MAX || newHeight > MAX) {
+
+      if (newWidth > MAX_WIDTH || newHeight > MAX_HEIGHT) {
         const aspectRatio = newWidth / newHeight;
         if (aspectRatio > 1) {
-          newWidth = MAX;
-          newHeight = Math.floor(MAX / aspectRatio);
+          newWidth = MAX_WIDTH;
+          newHeight = Math.floor(MAX_WIDTH / aspectRatio);
         } else {
-          newHeight = MAX;
-          newWidth = Math.floor(MAX * aspectRatio);
+          newHeight = MAX_HEIGHT;
+          newWidth = Math.floor(MAX_HEIGHT * aspectRatio);
         }
       }
-      const canvasTemp = document.createElement("canvas");
-      canvasTemp.width = newWidth;
-      canvasTemp.height = newHeight;
-      const ctx = canvasTemp.getContext("2d");
-      ctx.drawImage(image, 0, 0, newWidth, newHeight);
-      const imageBase64 = canvasTemp.toDataURL("image/jpeg", 0.8).replace(/^data:image\/jpeg;base64,/, "");
 
+      const canvas = document.createElement("canvas");
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(image, 0, 0, newWidth, newHeight);
+
+      //  Compress image (JPEG 80%)
+      const imageBase64 = canvas
+        .toDataURL("image/jpeg", 0.8)
+        .replace(/^data:image\/jpeg;base64,/, "");
+
+      //  Call backend API
       const res = await fetch("/api/remove-background", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64 }),
       });
 
-      if (!res.ok) return toast.error("Background removal failed");
+      if (!res.ok) {
+        const err = await res.json();
+        console.error("HF API error:", err);
+        toast.error("Background removal failed!");
+        return;
+      }
+
       const { result } = await res.json();
 
-      const bgImg = new Image();
-      bgImg.src = "data:image/png;base64," + result;
-      bgImg.onload = () => {
-        setImage(bgImg);
-        drawImageToCanvas(bgImg);
+      // Show returned image on canvas
+      const bgRemovedImg = new Image();
+      bgRemovedImg.src = "data:image/png;base64," + result;
+      bgRemovedImg.onload = () => {
+        const canvasRefCurrent = canvasRef.current;
+        canvasRefCurrent.width = bgRemovedImg.width;
+        canvasRefCurrent.height = bgRemovedImg.height;
+        const ctx2 = canvasRefCurrent.getContext("2d");
+        ctx2.clearRect(0, 0, canvasRefCurrent.width, canvasRefCurrent.height);
+        ctx2.drawImage(bgRemovedImg, 0, 0);
         setBgRemoved(true);
-        toast.success("Background removed!");
+        toast.success("Background removed successfully!");
       };
     } catch (err) {
-      console.error(err);
+      console.error("Background removal failed:", err);
       toast.error("Background removal failed!");
     } finally {
       setBgLoading(false);
@@ -96,6 +127,7 @@ export default function CanvasEditor() {
 
   // --- Execute Command ---
  const executeCommandAI = async (commandText) => {
+  setBgLoading(true)
   if (!commandText.trim()) return toast.error("Please enter a command!");
   try {
     // Vercel deployment ke liye relative URL
@@ -132,6 +164,7 @@ export default function CanvasEditor() {
     }
 
     toast.success("Command executed!");
+    setBgLoading(false)
   } catch (err) {
     console.error(err);
     toast.error("Command execution failed!");
@@ -160,8 +193,24 @@ export default function CanvasEditor() {
   };
 
   // - Drag & Drop ---
-  const handleDrop = (e) => { e.preventDefault(); handleFileChange({ target: { files: e.dataTransfer.files } }); };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
 
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image too large! Please choose an image below 5MB.");
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      setImage(img);
+      setBgRemoved(false);
+      drawImageToCanvas(img);
+    };
+    img.src = URL.createObjectURL(file);
+  };
 
   const handleDragOver = (e) => e.preventDefault();
 
@@ -170,29 +219,65 @@ export default function CanvasEditor() {
   }, [blurValue, image]);
 
   return (
-   <div style={{ textAlign: "center", padding: "20px" }}>
+    <div style={{ textAlign: "center", padding: "20px" }}>
       <Toaster position="top-right" />
-      <h2>📤 Upload / Generate / Drag & Drop Image</h2>
+      <h2>📤 Upload or Drag & Drop an Image</h2>
       <input type="file" accept="image/*" onChange={handleFileChange} />
 
-      <div onDrop={handleDrop} onDragOver={handleDragOver}
-        style={{ margin: "20px auto", width: "820px", height: "620px", border: "2px dashed #999", display: "flex", alignItems: "center", justifyContent: "center", background: "#fafafa" }}>
+      <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        style={{
+          margin: "20px auto",
+          width: "820px",
+          height: "620px",
+          border: "2px dashed #999",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#fafafa",
+        }}
+      >
         <canvas ref={canvasRef} width={800} height={600}></canvas>
       </div>
 
       <div style={{ marginTop: "20px" }}>
-        <label>Gaussian Blur: {blurValue}
-          <input type="range" min="0" max="25" value={blurValue} onChange={(e) => setBlurValue(parseInt(e.target.value))} style={{ width: "300px", marginLeft: "10px" }} />
+        <label>
+          Gaussian Blur: {blurValue}
+          <input
+            type="range"
+            min="0"
+            max="25"
+            value={blurValue}
+            onChange={(e) => setBlurValue(parseInt(e.target.value))}
+            style={{ width: "300px", marginLeft: "10px" }}
+          />
         </label>
       </div>
 
       <div style={{ marginTop: "20px" }}>
-        <input type="text" placeholder="Command / Prompt" value={command} onChange={(e) => setCommand(e.target.value)} style={{ width: "300px", padding: "5px" }} />
-        <button onClick={() => executeCommandAI(command)} style={{ marginLeft: "10px" }}>{promptLoading ? "Generating..." : "🎨 Generate command"}</button>
+        <input
+          type="text"
+          placeholder="Type command (eg: draw red circle, brighten 20%)"
+          value={command}
+          onChange={(e) => setCommand(e.target.value)}
+          style={{ width: "300px", padding: "5px" }}
+        />
+        <button
+          onClick={() => executeCommandAI(command)}
+          style={{ marginLeft: "10px" }}
+        >
+           {bgLoading ? "Processing..." : "🗑️ Execute command"}
+        </button>
       </div>
 
       <div style={{ marginTop: "20px" }}>
-        <button onClick={removeBackground} disabled={!image || bgRemoved || bgLoading}>{bgLoading ? "Processing..." : "🗑️ Remove Background"}</button>
+        <button
+          onClick={removeBackground}
+          disabled={!image || bgRemoved || bgLoading}
+        >
+          {bgLoading ? "Processing..." : "🗑️ Remove Background"}
+        </button>
         {bgRemoved && <span style={{ marginLeft: "10px" }}>✅ Done</span>}
       </div>
     </div>
