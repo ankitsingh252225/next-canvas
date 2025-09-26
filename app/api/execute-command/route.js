@@ -8,24 +8,26 @@ export async function POST(req) {
     if (!command) return new Response(JSON.stringify({ error: "Command missing" }), { status: 400 });
 
     const prompt = `
-      You are an image editor assistant.
-      Convert user command into JSON with following structure:
+      You are a canvas image editor assistant.
+      Convert the user's command into valid JSON with the following structure:
+
       {
         "action": "draw_circle" | "adjust_brightness",
-        "color": "<color>",
-        "x": <number>,
-        "y": <number>,
-        "radius": <number>,
-        "percent": <number>
+        "color": "<color>",       // for draw_circle
+        "x": <number>,            // for draw_circle
+        "y": <number>,            // for draw_circle
+        "radius": <number>,       // for draw_circle
+        "percent": <number>       // for adjust_brightness
       }
-      Command: "${command}"
-      Only return valid JSON.
+
+      Only return JSON. No explanations. Command: "${command}"
     `;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini",
+      temperature: 0.4,
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 200,
+      max_tokens: 1500,
     });
 
     const message = completion.choices[0].message.content.trim();
