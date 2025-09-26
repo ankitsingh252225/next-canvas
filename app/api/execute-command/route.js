@@ -28,10 +28,11 @@ export const POST = async (req) => {
       Only return valid JSON.
     `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+     const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.4,
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 200,
+      max_tokens: 1500,
     });
 
     const message = completion.choices[0].message.content.trim();
@@ -49,3 +50,5 @@ export const POST = async (req) => {
     });
   }
 };
+
+
