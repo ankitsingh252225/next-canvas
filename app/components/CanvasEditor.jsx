@@ -189,7 +189,6 @@ export default function CanvasEditor() {
       <div style={{ marginTop: "20px" }}>
         <input type="text" placeholder="Command / Prompt" value={command} onChange={(e) => setCommand(e.target.value)} style={{ width: "300px", padding: "5px" }} />
         <button onClick={() => executeCommandAI(command)} style={{ marginLeft: "10px" }}>{promptLoading ? "Generating..." : "🎨 Generate command"}</button>
-        <button onClick={generateImageFromPrompt} style={{ marginLeft: "10px" }}>{promptLoading ? "Generating..." : "🎨 Generate Image"}</button>
       </div>
 
       <div style={{ marginTop: "20px" }}>
