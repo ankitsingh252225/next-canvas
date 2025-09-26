@@ -9,6 +9,7 @@ export default function CanvasEditor() {
   const [blurValue, setBlurValue] = useState(0);
   const [bgRemoved, setBgRemoved] = useState(false);
   const [bgLoading, setBgLoading] = useState(false);
+  const [prompting,setprompting]=useState(false)
 
   // --- Draw Image to Canvas ---
   const drawImageToCanvas = (img) => {
@@ -127,7 +128,7 @@ export default function CanvasEditor() {
 
   // --- Execute Command ---
  const executeCommandAI = async (commandText) => {
-  setBgLoading(true)
+  setprompting(true)
   if (!commandText.trim()) return toast.error("Please enter a command!");
   try {
     // Vercel deployment ke liye relative URL
@@ -164,7 +165,7 @@ export default function CanvasEditor() {
     }
 
     toast.success("Command executed!");
-    setBgLoading(false)
+    setprompting(false)
   } catch (err) {
     console.error(err);
     toast.error("Command execution failed!");
@@ -267,7 +268,7 @@ export default function CanvasEditor() {
           onClick={() => executeCommandAI(command)}
           style={{ marginLeft: "10px" }}
         >
-           {bgLoading ? "Processing..." : "🗑️ Execute command"}
+           {prompting ? "Processing..." : "🗑️ Execute command"}
         </button>
       </div>
 
